@@ -1,0 +1,127 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Prompt", ui-sans-serif, system-ui, sans-serif;
+  --font-brand: "Bodoni Moda", serif;
+}
+
+@layer base {
+  html, body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    position: fixed;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  body {
+    font-family: var(--font-sans);
+  }
+  
+  #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+}
+
+@layer components {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .brand-logo-text {
+    font-family: var(--font-brand);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 0.9;
+    text-transform: lowercase;
+  }
+
+  .bg-pattern {
+    background-color: #FFFBEB;
+    background-image: radial-gradient(#F8B50022 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .bg-pattern-gray {
+    background-color: #FBF7F0;
+    background-image: radial-gradient(#D1D5DB 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  .coupon-shadow {
+    box-shadow: 0 20px 25px -5px rgba(139, 92, 26, 0.05), 0 10px 10px -5px rgba(139, 92, 26, 0.04);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #E2E8F0;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #CBD5E1;
+  }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-150%) skewX(-20deg); }
+  100% { transform: translateX(250%) skewX(-20deg); }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 0.4; }
+}
+
+@keyframes line-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes success-pop {
+  0% { transform: scale(0); opacity: 0; }
+  70% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes check-draw {
+  from { stroke-dashoffset: 50; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes ripple-center {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-shimmer { animation: shimmer 3s infinite; }
+.animate-pulse-subtle { animation: pulse-subtle 2.5s infinite ease-in-out; }
+.animate-line-slide { animation: line-slide 2s infinite cubic-bezier(0.4, 0, 0.2, 1); }
+.animate-success-pop { animation: success-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.animate-check-draw { stroke-dasharray: 50; stroke-dashoffset: 50; animation: check-draw 0.5s ease-out 0.5s forwards; }
+.animate-ripple-center { animation: ripple-center 2s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+.animate-fade-up { opacity: 0; animation: fade-up 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }

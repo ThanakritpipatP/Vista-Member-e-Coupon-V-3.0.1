@@ -1,0 +1,145 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Vista Café e-Coupon</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;700&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --app-height: 100%;
+      }
+      html, body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        position: fixed;
+        overscroll-behavior: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      body {
+        font-family: 'Prompt', sans-serif;
+      }
+      #root {
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      
+      @keyframes shimmer {
+        0% { transform: translateX(-150%) skewX(-20deg); }
+        100% { transform: translateX(250%) skewX(-20deg); }
+      }
+      .animate-shimmer {
+        animation: shimmer 3s infinite;
+      }
+
+      @keyframes pulse-subtle {
+        0%, 100% { transform: scale(1); opacity: 0.8; }
+        50% { transform: scale(1.1); opacity: 0.4; }
+      }
+      .animate-pulse-subtle {
+        animation: pulse-subtle 2.5s infinite ease-in-out;
+      }
+
+      @keyframes line-slide {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(200%); }
+      }
+      .animate-line-slide {
+        animation: line-slide 2s infinite cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      /* Success Icon Animations */
+      @keyframes success-pop {
+        0% { transform: scale(0); opacity: 0; }
+        70% { transform: scale(1.15); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      .animate-success-pop {
+        animation: success-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      }
+
+      @keyframes check-draw {
+        from { stroke-dashoffset: 50; }
+        to { stroke-dashoffset: 0; }
+      }
+      .animate-check-draw {
+        stroke-dasharray: 50;
+        stroke-dashoffset: 50;
+        animation: check-draw 0.5s ease-out 0.5s forwards;
+      }
+
+      @keyframes ripple-center {
+        0% { transform: scale(0.8); opacity: 1; }
+        100% { transform: scale(1.8); opacity: 0; }
+      }
+      .animate-ripple-center {
+        animation: ripple-center 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+
+      /* Staggered entrance animations */
+      @keyframes fade-up {
+        from { opacity: 0; transform: translateY(30px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fade-up {
+        opacity: 0;
+        animation: fade-up 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+      }
+      .delay-100 { animation-delay: 0.1s; }
+      .delay-200 { animation-delay: 0.2s; }
+      .delay-300 { animation-delay: 0.3s; }
+      .delay-400 { animation-delay: 0.4s; }
+
+      .font-brand {
+        font-family: 'Bodoni Moda', serif;
+        font-optical-sizing: auto;
+      }
+      
+      .brand-logo-text {
+        font-family: 'Bodoni Moda', serif;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 0.9;
+        text-transform: lowercase;
+      }
+
+      /* Background Pattern - Brand CI Pastel */
+      .bg-pattern {
+        background-color: #FFFBEB; /* Brand Pastel Yellow CI (Amber 50) */
+        background-image: radial-gradient(#F8B50022 1px, transparent 1px);
+        background-size: 24px 24px;
+      }
+
+      .bg-pattern-gray {
+        background-color: #FBF7F0; /* Premium Warm Ivory */
+        background-image: radial-gradient(#D1D5DB 1px, transparent 1px);
+        background-size: 32px 32px;
+      }
+
+      /* Premium Coupon Shadow */
+      .coupon-shadow {
+        box-shadow: 0 20px 25px -5px rgba(139, 92, 26, 0.05), 0 10px 10px -5px rgba(139, 92, 26, 0.04);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
