@@ -5,21 +5,19 @@ import { PROMOTIONS, VISTA_BRANCHES } from '../constants';
 import { getUsageLogs, importLogsFromCSV, getCouponsFromFirestore, addCouponToFirestore, updateCouponInFirestore, deleteCouponFromFirestore, cleanupDuplicateLogs, getMembers, updateMemberInFirestore, getMemberUsageLogs, deleteAllUsageLogs, fixMissingTimestamps } from '../services/api';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { db, auth } from '../firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp, onSnapshot, query, orderBy, limit, writeBatch, where } from 'firebase/firestore';
-import { LayoutDashboard, Ticket, Users, BarChart3, Settings, Plus, Edit2, Trash2, Search, ChevronRight, ChevronLeft, Upload, Loader2, CheckCircle2, AlertCircle, RefreshCw, X, Calendar, Clock, TrendingUp, MapPin, Copy, Power, MoreVertical, ExternalLink, History, ArrowUp, Download, Megaphone, Phone } from 'lucide-react';
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp, onSnapshot, query, orderBy, limit, writeBatch } from 'firebase/firestore';
+import { LayoutDashboard, Ticket, Users, BarChart3, Settings, Plus, Edit2, Trash2, Search, ChevronRight, ChevronLeft, Upload, Loader2, CheckCircle2, AlertCircle, RefreshCw, X, Calendar, Clock, TrendingUp, MapPin, Copy, Power, MoreVertical, ExternalLink, History, ArrowUp, Download } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   LineChart, Line, PieChart as RePieChart, Pie, Cell, Legend, AreaChart, Area 
 } from 'recharts';
-import AdSettingsPanel from './AdSettingsPanel';
-import CampaignManager from './CampaignManager';
 
 interface AdminDashboardProps {
   onBack: () => void;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'campaigns' | 'customers' | 'analytics' | 'system' | 'audit' | 'ads'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'campaigns' | 'customers' | 'analytics' | 'system' | 'audit'>('dashboard');
   const [promotions, setPromotions] = useState<WeeklyPromotion[]>([]);
   const [usageLogs, setUsageLogs] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -34,7 +32,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [currentCustomerPage, setCurrentCustomerPage] = useState(1);
   const [currentAuditPage, setCurrentAuditPage] = useState(1);
-  const itemsPerPage = 30;
+  const itemsPerPage = 100;
   const [operationProgress, setOperationProgress] = useState<{ current: number, total: number, message: string } | null>(null);
   const [importStatus, setImportStatus] = useState<{ success: number, failed: number } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -86,6 +84,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     
     return realName || log.memberName || 'Guest';
   };
+  const [editingPromo, setEditingPromo] = useState<any>(null);
   const [editingMember, setEditingMember] = useState<any>(null);
   const [viewingMemberHistory, setViewingMemberHistory] = useState<any>(null);
   const [memberHistoryLogs, setMemberHistoryLogs] = useState<any[]>([]);
@@ -93,10 +92,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-
-  const couponUsageLogs = useMemo(() => {
-    return usageLogs.filter(log => log.type !== 'ad_click');
-  }, [usageLogs]);
 
   // Helper to format date for HTML date inputs (YYYY-MM-DD) using local time
   const formatLocalDate = (date: any) => {
@@ -117,6 +112,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   const [targetBranchForMigration, setTargetBranchForMigration] = useState<string>('');
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('all');
   const [selectedCouponId, setSelectedCouponId] = useState<string>('all');
+  const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
+  const [editingCoupon, setEditingCoupon] = useState<any>(null);
+  const [tempCoupons, setTempCoupons] = useState<any[]>([]);
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
     type: 'campaign' | 'coupon' | null;
@@ -134,67 +132,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     confirmText: 'ยืนยันการลบ'
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isClearingAdStats, setIsClearingAdStats] = useState(false);
-
-  const handleClearAdStats = () => {
-    // Check if there are any ad clicks to delete
-    const hasAdClicks = usageLogs.some(log => log.type === 'ad_click');
-    if (!hasAdClicks) {
-        alert('ไม่พบข้อมูลสถิติโฆษณาในระบบ');
-        return;
-    }
-
-    setDeleteModal({
-      isOpen: true,
-      type: null,
-      id: 'clear_ad_stats',
-      title: 'ยืนยันการลบสถิติ',
-      message: 'คุณต้องการลบสถิติการคลิกโฆษณาทั้งหมดใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้',
-      confirmText: 'ลบข้อมูล',
-      onConfirm: async () => {
-        setIsClearingAdStats(true);
-        try {
-          const q = query(collection(db, 'usage_logs'), where('type', '==', 'ad_click'));
-          const snapshot = await getDocs(q);
-          
-          if (snapshot.empty) {
-            alert('ไม่พบข้อมูลสถิติโฆษณา');
-            setIsClearingAdStats(false);
-            return;
-          }
-
-          const total = snapshot.docs.length;
-          let deletedCount = 0;
-          const BATCH_SIZE = 400; // Safe limit below 500
-          
-          // Process in chunks
-          for (let i = 0; i < total; i += BATCH_SIZE) {
-            const batch = writeBatch(db);
-            const chunk = snapshot.docs.slice(i, i + BATCH_SIZE);
-            
-            chunk.forEach(doc => {
-              // Double safety check: Verify client-side that this is indeed an ad_click log
-              const data = doc.data();
-              if (data.type === 'ad_click') {
-                batch.delete(doc.ref);
-              }
-            });
-            
-            await batch.commit();
-            deletedCount += chunk.length;
-          }
-          
-          await fetchLogs(); // Refresh data
-          alert(`ลบสถิติเรียบร้อยแล้ว (${deletedCount} รายการ)`);
-        } catch (error) {
-          console.error('Error clearing ad stats:', error);
-          alert('เกิดข้อผิดพลาดในการลบข้อมูล: ' + (error instanceof Error ? error.message : String(error)));
-        } finally {
-          setIsClearingAdStats(false);
-        }
-      }
-    });
-  };
 
   useEffect(() => {
     fetchLogs();
@@ -331,6 +268,54 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     }
   };
 
+  const handleEditPromo = (promo: WeeklyPromotion) => {
+    setEditingPromo(promo);
+    setTempCoupons(promo.coupons || []);
+    setIsModalOpen(true);
+  };
+
+  const handleAddCoupon = () => {
+    setEditingCoupon({
+      id: Date.now().toString(),
+      name: '',
+      cardTitle: '',
+      description: '',
+      isMemberOnly: false,
+      usageLimit: '1 สิทธิ์ / ใบเสร็จ',
+      imageUrl: 'https://img5.pic.in.th/file/secure-sv1/Logo-Vistacafe-01.jpg',
+      validityPeriod: '',
+      details: '',
+      terms: '',
+      targetType: 'all',
+      targetIds: ''
+    });
+    setIsCouponModalOpen(true);
+  };
+
+  const handleEditCoupon = (coupon: any) => {
+    setEditingCoupon({
+      ...coupon,
+      targetType: coupon.targetType || 'all',
+      targetIds: coupon.targetIds ? coupon.targetIds.join(',') : ''
+    });
+    setIsCouponModalOpen(true);
+  };
+
+  const handleDeleteCoupon = (couponId: string, couponName: string) => {
+    if (!couponId) {
+       console.warn("Attempted to delete coupon without ID");
+       return;
+    }
+    
+    setDeleteModal({
+      isOpen: true,
+      type: 'coupon',
+      id: couponId,
+      title: 'ยืนยันการลบคูปอง',
+      message: `คุณแน่ใจหรือไม่ว่าต้องการลบคูปอง "${couponName}"? การดำเนินการนี้ไม่สามารถย้อนกลับได้`
+    });
+  };
+
   const executeDelete = async () => {
     const { type, id, onConfirm } = deleteModal;
     
@@ -340,7 +325,86 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
       return;
     }
 
+    if (!id) return;
+
+    if (type === 'coupon') {
+      const updatedCoupons = tempCoupons.filter(c => c.id !== id);
+      setTempCoupons(updatedCoupons);
+
+      if (editingPromo?.id) {
+        try {
+          await updateDoc(doc(db, "promotions", editingPromo.id), {
+            coupons: updatedCoupons
+          });
+          await addAuditLog('Delete Coupon', `Deleted coupon from campaign "${editingPromo.period}"`, id, 'coupon');
+        } catch (error) {
+          console.error("Error deleting coupon from Firestore:", error);
+          alert("Failed to delete coupon");
+        }
+      }
+    } else if (type === 'campaign') {
+      try {
+        const promoToDelete = promotions.find(p => p.id === id);
+        setPromotions(prev => prev.filter(p => p.id !== id));
+        await deleteDoc(doc(db, "promotions", id));
+        await addAuditLog('Delete Campaign', `Deleted campaign "${promoToDelete?.period || id}"`, id, 'campaign');
+      } catch (error) {
+        console.error("Delete failed:", error);
+        alert('Delete failed. Please try again.');
+      }
+    }
+    
     setDeleteModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const handleSaveCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Removed window.confirm to prevent blocking issues
+    // if (!window.confirm('คุณต้องการบันทึกคูปองนี้ใช่หรือไม่? ข้อมูลจะมีผลกับสมาชิกทันที')) return;
+
+    try {
+      const formData = new FormData(e.target as HTMLFormElement);
+      
+      const targetIdsRaw = formData.get('targetIds');
+      const targetIdsStr = typeof targetIdsRaw === 'string' ? targetIdsRaw : '';
+      const targetIds = targetIdsStr.split(',').map(id => id ? id.trim() : '').filter(id => id !== '');
+
+      const newCoupon = {
+        ...editingCoupon,
+        name: formData.get('name'),
+        cardTitle: formData.get('cardTitle'),
+        description: formData.get('description'),
+        imageUrl: formData.get('imageUrl'),
+        isMemberOnly: formData.get('isMemberOnly') === 'on',
+        usageLimit: formData.get('usageLimit'),
+        validityPeriod: formData.get('validityPeriod'),
+        details: formData.get('details'),
+        terms: formData.get('terms'),
+        targetType: formData.get('targetType'),
+        targetIds: targetIds
+      };
+
+      let updatedCoupons;
+      if (tempCoupons.find(c => c.id === newCoupon.id)) {
+        updatedCoupons = tempCoupons.map(c => c.id === newCoupon.id ? newCoupon : c);
+      } else {
+        updatedCoupons = [...tempCoupons, newCoupon];
+      }
+      
+      setTempCoupons(updatedCoupons);
+      setIsCouponModalOpen(false);
+
+      if (editingPromo?.id) {
+        await updateDoc(doc(db, "promotions", editingPromo.id), {
+          coupons: updatedCoupons
+        });
+        alert("Coupon saved successfully");
+      }
+    } catch (error) {
+      console.error("Error saving coupon:", error);
+      alert('Error saving coupon. Please try again.');
+    }
   };
 
   const fetchMembers = async () => {
@@ -388,20 +452,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     const firstNameRaw = formData.get('firstName');
     const lastNameRaw = formData.get('lastName');
     const phoneRaw = formData.get('phone');
-    const emailRaw = formData.get('email');
-    const lineIdRaw = formData.get('lineId');
-    const birthDateRaw = formData.get('birthDate');
-    const pointsRaw = formData.get('points');
-    const addressRaw = formData.get('address');
     
     const firstName = typeof firstNameRaw === 'string' ? firstNameRaw : '';
     const lastName = typeof lastNameRaw === 'string' ? lastNameRaw : '';
     const phone = typeof phoneRaw === 'string' ? phoneRaw : '';
-    const email = typeof emailRaw === 'string' ? emailRaw : '';
-    const lineId = typeof lineIdRaw === 'string' ? lineIdRaw : '';
-    const birthDate = typeof birthDateRaw === 'string' ? birthDateRaw : '';
-    const points = typeof pointsRaw === 'string' ? parseInt(pointsRaw) || 0 : 0;
-    const address = typeof addressRaw === 'string' ? addressRaw : '';
 
     // Prepare data for update, referencing existing fields in database
     const updatedData: any = {
@@ -409,11 +463,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
       lastName,
       name: `${firstName} ${lastName}`.trim(),
       phone,
-      email,
-      lineId,
-      birthDate,
-      points,
-      address
     };
 
     // Check if there are other phone number fields, sync them to avoid creating new fields
@@ -423,12 +472,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     try {
       await updateMemberInFirestore(editingMember.id, updatedData);
       await addAuditLog('Update Member', `Updated member info for "${updatedData.name}" (${editingMember.id})`, editingMember.id, 'member');
-      alert('บันทึกข้อมูลสมาชิกเรียบร้อยแล้ว');
+      alert('Member information saved successfully');
       setIsMemberModalOpen(false);
       fetchMembers();
     } catch (error) {
       console.error("Save member failed:", error);
-      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      alert('Error saving member information');
     }
   };
 
@@ -734,7 +783,82 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     }
   };
 
+  const handleDeletePromo = (id?: string, period?: string) => {
+    if (!id) {
+      alert('Cannot delete default data. Please click "Sync Initial Data" to import data to database before managing.');
+      return;
+    }
+    
+    setDeleteModal({
+      isOpen: true,
+      type: 'campaign',
+      id: id,
+      title: 'ยืนยันการลบแคมเปญ',
+      message: `คุณแน่ใจหรือไม่ว่าต้องการลบแคมเปญ "${period}"? คูปองทั้งหมดในแคมเปญนี้จะถูกลบไปด้วย`
+    });
+  };
 
+  const handleTogglePromoStatus = async (promo: WeeklyPromotion) => {
+    if (!promo.id) {
+      alert('ไม่สามารถเปลี่ยนสถานะข้อมูลเริ่มต้นได้ กรุณาคลิก "คัดลอก" หรือ "ซิงค์ข้อมูล" เพื่อนำเข้าฐานข้อมูลก่อน');
+      return;
+    }
+    
+    try {
+      const newStatus = promo.isActive === false ? true : false;
+      await updateDoc(doc(db, "promotions", promo.id), {
+        isActive: newStatus
+      });
+      await addAuditLog('Toggle Status', `${newStatus ? 'Enabled' : 'Disabled'} campaign "${promo.period}"`, promo.id, 'campaign');
+    } catch (error) {
+      console.error("Error toggling campaign status:", error);
+      alert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะ');
+    }
+  };
+
+  const handleSavePromo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const formData = new FormData(e.target as HTMLFormElement);
+    
+    // Safely get checkbox value
+    const isActive = formData.get('isActive') === 'on';
+
+    const startDateStr = formData.get('startDate') as string;
+    const endDateStr = formData.get('endDate') as string;
+
+    if (!startDateStr || !endDateStr) {
+        alert('Please specify start and end dates');
+        return;
+    }
+
+    const [sYear, sMonth, sDay] = startDateStr.split('-').map(Number);
+    const [eYear, eMonth, eDay] = endDateStr.split('-').map(Number);
+
+    const promoData = {
+      week: parseInt(formData.get('week') as string) || 0,
+      priority: parseInt(formData.get('priority') as string) || 0,
+      period: formData.get('period') as string || '',
+      startDate: new Date(sYear, sMonth - 1, sDay, 0, 0, 0),
+      endDate: new Date(eYear, eMonth - 1, eDay, 23, 59, 59),
+      isActive: isActive,
+      coupons: tempCoupons || []
+    };
+
+    try {
+      if (editingPromo?.id) {
+        await updateDoc(doc(db, "promotions", editingPromo.id), promoData);
+        await addAuditLog('Update Campaign', `Updated campaign "${promoData.period}"`, editingPromo.id, 'campaign');
+      } else {
+        const docRef = await addDoc(collection(db, "promotions"), promoData);
+        await addAuditLog('Create Campaign', `Created new campaign "${promoData.period}"`, docRef.id, 'campaign');
+      }
+      setIsModalOpen(false);
+      setEditingPromo(null);
+    } catch (error) {
+      console.error("Save failed:", error);
+      alert('Save failed');
+    }
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -775,14 +899,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
   // Analytics Data Processing
    const getAnalyticsData = () => {
-    // Separate logs
-    const couponLogs = usageLogs.filter(l => l.type !== 'ad_click');
-    const adLogs = usageLogs.filter(l => l.type === 'ad_click');
-
     // Filter logs by branch first if selected
     let filteredBaseLogs = selectedBranch === 'all' 
-      ? couponLogs 
-      : couponLogs.filter(log => log.branchName === selectedBranch);
+      ? usageLogs 
+      : usageLogs.filter(log => log.branchName === selectedBranch);
 
     // Filter by Campaign
     if (selectedCampaignId !== 'all') {
@@ -1006,47 +1126,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         }
     }
 
-    // Ad Analytics
-    const filteredAdLogs = adLogs.filter(log => {
-        try {
-            let d: Date | null = null;
-            if (log.timestamp?.toDate) {
-                d = log.timestamp.toDate();
-            } else if (log.createdAt) {
-                d = new Date(log.createdAt);
-            }
-            
-            if (!d || isNaN(d.getTime())) return false;
-            
-            const logDate = formatLocalDate(d);
-            return logDate >= analyticsRange.start && logDate <= analyticsRange.end;
-        } catch (e) {
-            return false;
-        }
-    });
-
-    const adClickCounts: Record<string, number> = {};
-    filteredAdLogs.forEach(log => {
-        const title = log.adTitle || 'Untitled Ad';
-        adClickCounts[title] = (adClickCounts[title] || 0) + 1;
-    });
-
-    const adAnalyticsData = Object.entries(adClickCounts)
-        .map(([name, count]) => ({ name, count }))
-        .sort((a, b) => b.count - a.count);
-
-    return { 
-        dailyData, 
-        couponData, 
-        branchData, 
-        statusData, 
-        utilizationData, 
-        utilizationTotal, 
-        totalInRange: filteredLogs.length, 
-        diffDays,
-        adAnalyticsData,
-        totalAdClicks: filteredAdLogs.length
-    };
+    return { dailyData, couponData, branchData, statusData, utilizationData, utilizationTotal, totalInRange: filteredLogs.length, diffDays };
   };
 
   const analytics = getAnalyticsData();
@@ -1163,18 +1243,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
               <span className="text-sm">จัดการแคมเปญ</span>
             </button>
             <button 
-              onClick={() => setActiveTab('ads')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${activeTab === 'ads' ? 'bg-slate-50 text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
-            >
-              <Megaphone size={18} strokeWidth={activeTab === 'ads' ? 2.5 : 2} />
-              <span className="text-sm">จัดการโฆษณา</span>
-            </button>
-            <button 
               onClick={() => setActiveTab('customers')}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${activeTab === 'customers' ? 'bg-slate-50 text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
             >
               <Users size={18} strokeWidth={activeTab === 'customers' ? 2.5 : 2} />
-              <span className="text-sm">จัดการข้อมูลสมาชิก</span>
+              <span className="text-sm">รายชื่อสมาชิก</span>
             </button>
             <button 
               onClick={() => setActiveTab('analytics')}
@@ -1223,7 +1296,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">
               {activeTab === 'dashboard' && 'ภาพรวมระบบ'}
               {activeTab === 'campaigns' && 'จัดการแคมเปญและคูปอง'}
-              {activeTab === 'ads' && 'จัดการโฆษณา'}
               {activeTab === 'customers' && 'ข้อมูลสมาชิก'}
               {activeTab === 'analytics' && 'รายงานสถิติ'}
               {activeTab === 'system' && 'ตั้งค่าระบบ'}
@@ -1306,12 +1378,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                         <tr>
                           <td colSpan={5} className="py-12 text-center text-slate-300 text-xs font-medium">กำลังโหลดข้อมูล...</td>
                         </tr>
-                      ) : couponUsageLogs.length === 0 ? (
+                      ) : usageLogs.length === 0 ? (
                         <tr>
                           <td colSpan={5} className="py-12 text-center text-slate-300 text-xs font-medium">ไม่มีกิจกรรมล่าสุด</td>
                         </tr>
                       ) : (
-                        couponUsageLogs
+                        usageLogs
                           .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                           .map((log, i) => (
                           <tr key={log.id || i} className="group hover:bg-slate-50/50 transition-colors">
@@ -1356,10 +1428,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                 </div>
 
                 {/* Pagination Controls */}
-                {couponUsageLogs.length > itemsPerPage && (
+                {usageLogs.length > itemsPerPage && (
                   <div className="flex items-center justify-between pt-6 border-t border-slate-50">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      แสดง {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, couponUsageLogs.length)} จาก {couponUsageLogs.length}
+                      แสดง {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, usageLogs.length)} จาก {usageLogs.length}
                     </p>
                     <div className="flex items-center gap-2">
                       <button 
@@ -1370,7 +1442,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                         <ChevronLeft size={16} />
                       </button>
                       <div className="flex items-center gap-1">
-                        {Array.from({ length: Math.min(5, Math.ceil(couponUsageLogs.length / itemsPerPage)) }, (_, i) => {
+                        {Array.from({ length: Math.min(5, Math.ceil(usageLogs.length / itemsPerPage)) }, (_, i) => {
                           const pageNum = i + 1;
                           return (
                             <button
@@ -1382,11 +1454,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                             </button>
                           );
                         })}
-                        {Math.ceil(couponUsageLogs.length / itemsPerPage) > 5 && <span className="text-slate-300 px-1">...</span>}
+                        {Math.ceil(usageLogs.length / itemsPerPage) > 5 && <span className="text-slate-300 px-1">...</span>}
                       </div>
                       <button 
-                        onClick={() => setCurrentPage(prev => Math.min(Math.ceil(couponUsageLogs.length / itemsPerPage), prev + 1))}
-                        disabled={currentPage === Math.ceil(couponUsageLogs.length / itemsPerPage)}
+                        onClick={() => setCurrentPage(prev => Math.min(Math.ceil(usageLogs.length / itemsPerPage), prev + 1))}
+                        disabled={currentPage === Math.ceil(usageLogs.length / itemsPerPage)}
                         className="p-2 border border-slate-100 rounded-lg text-slate-400 hover:text-slate-900 disabled:opacity-30 transition-all"
                       >
                         <ChevronRight size={16} />
@@ -1398,240 +1470,219 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
             </div>
           )}
 
-          {activeTab === 'campaigns' && <CampaignManager />}
-
-          {activeTab === 'ads' && <AdSettingsPanel />}
-
-          {activeTab === 'customers' && (
-            <div className="space-y-6 animate-fade-in pb-20">
-              {/* Header & Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-2 space-y-1">
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                    <Users className="text-slate-900" size={24} />
-                    จัดการข้อมูลสมาชิก
-                  </h3>
-                  <p className="text-sm text-slate-500 font-medium">จัดการรายชื่อสมาชิก ดูประวัติ และแก้ไขข้อมูล</p>
+          {activeTab === 'campaigns' && (
+            <div className="space-y-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight">แคมเปญ</h3>
+                  <p className="text-xs text-slate-400 font-medium">จัดการโปรโมชั่นและคูปองที่กำลังใช้งาน</p>
                 </div>
-                <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-lg shadow-slate-900/10 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">สมาชิกทั้งหมด</p>
-                    <h4 className="text-3xl font-black">{members.length.toLocaleString()}</h4>
-                  </div>
-                  <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
-                    <Users size={20} className="text-white" />
-                  </div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => { 
+                      setEditingPromo(null); 
+                      setTempCoupons([]);
+                      setIsModalOpen(true); 
+                    }}
+                    className="bg-slate-900 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 hover:bg-black transition-all shadow-sm"
+                  >
+                    <Plus size={14} />
+                    สร้างแคมเปญใหม่
+                  </button>
                 </div>
               </div>
 
-              {/* Search & Filter */}
-              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between sticky top-0 z-10">
-                <div className="relative w-full md:w-96">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <div className="grid grid-cols-1 gap-4">
+                {promotions.map((promo, pIndex) => (
+                  <div key={pIndex} className={`group bg-white rounded-2xl border ${promo.isActive === false ? 'border-slate-100 bg-slate-50/30' : 'border-slate-100'} hover:border-slate-200 transition-all overflow-hidden shadow-sm`}>
+                    <div className="px-6 py-4 border-b border-slate-50 flex items-center justify-between bg-white">
+                      <div className="flex items-center gap-4">
+                        <button 
+                          onClick={() => handleTogglePromoStatus(promo)}
+                          disabled={isSyncing}
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${promo.isActive !== false ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'} disabled:opacity-50`}
+                          title={promo.isActive !== false ? "คลิกเพื่อปิดแคมเปญ" : "คลิกเพื่อเปิดแคมเปญ"}
+                        >
+                          <Power size={18} />
+                        </button>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-slate-900 text-sm">{promo.period}</h4>
+                            {promo.isActive === false && (
+                              <span className="text-[8px] font-black bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-md uppercase tracking-tighter">Inactive</span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-400 font-medium">
+                            {(() => {
+                              const start = new Date(promo.startDate);
+                              const end = new Date(promo.endDate);
+                              if (isNaN(start.getTime()) || isNaN(end.getTime())) return 'Invalid Date';
+                              return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <button 
+                          onClick={() => handleEditPromo(promo)}
+                          disabled={isSyncing}
+                          className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-all disabled:opacity-50"
+                          title="แก้ไข"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeletePromo(promo.id, promo.period)}
+                          disabled={isSyncing}
+                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
+                          title="ลบ"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {promo.coupons.map((coupon, cIndex) => (
+                        <div key={cIndex} className="flex gap-3 p-3 rounded-xl border border-slate-50 bg-white hover:border-slate-200 transition-all group/coupon relative">
+                          <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-slate-50 border border-slate-100">
+                            <img src={coupon.imageUrl} alt="" className="w-full h-full object-cover" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <h5 className="font-bold text-slate-900 text-xs truncate">{coupon.name}</h5>
+                              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md ${coupon.targetType === 'specific' ? 'bg-amber-100 text-amber-700' : (coupon.isMemberOnly ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500')}`}>
+                                {coupon.targetType === 'specific' ? 'TARGETED' : (coupon.isMemberOnly ? 'MEMBER' : 'ALL')}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 truncate">{coupon.description}</p>
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="text-[9px] font-mono text-slate-300 bg-slate-50 px-1 rounded">#{coupon.id.substring(0, 6)}</span>
+                              <button 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(coupon.id);
+                                  alert('คัดลอกรหัสคูปองแล้ว');
+                                }}
+                                className="opacity-0 group-hover/coupon:opacity-100 transition-opacity text-slate-300 hover:text-slate-900"
+                              >
+                                <Copy size={10} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'customers' && (
+            <div className="space-y-8 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight">สมาชิก</h3>
+                  <p className="text-xs text-slate-400 font-medium">รายชื่อสมาชิก Vista Café ทั้งหมดในระบบ</p>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
                   <input 
                     type="text" 
-                    placeholder="ค้นหาด้วยชื่อ, เบอร์โทร, หรือรหัสสมาชิก..." 
+                    placeholder="ค้นหาสมาชิก..." 
                     value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setCurrentCustomerPage(1); // Reset page on search
-                    }}
-                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-slate-900/10 text-slate-900 placeholder:text-slate-400 transition-all"
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 pr-10 py-1.5 bg-slate-50 border-none rounded-lg text-xs focus:ring-1 focus:ring-slate-200 w-64 text-slate-900"
                   />
                   {searchQuery && (
                     <button 
-                      onClick={() => {
-                        setSearchQuery('');
-                        setCurrentCustomerPage(1);
-                      }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1 hover:bg-slate-200 rounded-full"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 transition-colors"
                     >
                       <X size={14} />
                     </button>
                   )}
                 </div>
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-                  <span>เรียงตาม:</span>
-                  <select className="bg-slate-50 border-none rounded-lg py-1.5 pl-3 pr-8 text-xs font-bold text-slate-700 focus:ring-0 cursor-pointer">
-                    <option>ล่าสุด</option>
-                    <option>ชื่อ A-Z</option>
-                  </select>
-                </div>
               </div>
 
-              {/* Members Table */}
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/50 border-b border-slate-100">
-                        <th className="py-4 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest w-20">#</th>
-                        <th className="py-4 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">ข้อมูลสมาชิก</th>
-                        <th className="py-4 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">การติดต่อ</th>
-                        <th className="py-4 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">วันที่สมัคร</th>
-                        <th className="py-4 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">จัดการ</th>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-50">
+                      <th className="py-3 text-[10px] font-black text-slate-300 uppercase tracking-widest">รหัสสมาชิก</th>
+                      <th className="py-3 text-[10px] font-black text-slate-300 uppercase tracking-widest">ชื่อ-นามสกุล</th>
+                      <th className="py-3 text-[10px] font-black text-slate-300 uppercase tracking-widest">เบอร์โทรศัพท์</th>
+                      <th className="py-3 text-[10px] font-black text-slate-300 uppercase tracking-widest text-right">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {isLoading && members.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-12 text-center text-slate-300 text-xs font-medium">Loading members...</td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {isLoading && members.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="py-20 text-center">
-                            <div className="flex flex-col items-center gap-3">
-                              <Loader2 size={32} className="animate-spin text-slate-300" />
-                              <p className="text-sm font-bold text-slate-400">กำลังโหลดข้อมูลสมาชิก...</p>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : members.filter(m => {
-                        const fullName = m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim();
-                        const identifier = m.contactPhone || m.memberId || m.identifier || m.id;
-                        const phone = m.phoneNumber || m.phone || m.contactPhone || '';
-                        const q = searchQuery.toLowerCase();
-                        return fullName.toLowerCase().includes(q) || 
-                               identifier.toLowerCase().includes(q) ||
-                               phone.includes(q);
-                      }).length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="py-20 text-center">
-                            <div className="flex flex-col items-center gap-3">
-                              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center">
-                                <Search size={24} className="text-slate-300" />
-                              </div>
-                              <p className="text-sm font-bold text-slate-400">ไม่พบสมาชิกที่ค้นหา</p>
-                              <button onClick={() => setSearchQuery('')} className="text-xs font-bold text-slate-900 hover:underline">
-                                ล้างคำค้นหา
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : (
-                        members
-                          .filter(m => {
-                            const fullName = m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim();
-                            const identifier = m.contactPhone || m.memberId || m.identifier || m.id;
-                            const phone = m.phoneNumber || m.phone || m.contactPhone || '';
-                            const q = searchQuery.toLowerCase();
-                            return fullName.toLowerCase().includes(q) || 
-                                   identifier.toLowerCase().includes(q) ||
-                                   phone.includes(q);
-                          })
-                          .slice((currentCustomerPage - 1) * itemsPerPage, currentCustomerPage * itemsPerPage)
-                          .map((member, i) => {
-                            const fullName = member.name || `${member.firstName || ''} ${member.lastName || ''}`.trim();
-                            const identifier = member.contactPhone || member.memberId || member.identifier || member.id;
-                            const phone = member.phoneNumber || member.phone || member.contactPhone || identifier;
-                            const joinDate = member.createdAt ? (member.createdAt.seconds ? new Date(member.createdAt.seconds * 1000) : new Date(member.createdAt)) : null;
+                    ) : members.filter(m => {
+                      const fullName = m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim();
+                      const identifier = m.contactPhone || m.memberId || m.identifier || m.id;
+                      const phone = m.phoneNumber || m.phone || m.contactPhone || '';
+                      
+                      return fullName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                             identifier.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                             phone.includes(searchQuery);
+                    }).length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-12 text-center text-slate-300 text-xs font-medium">No members found</td>
+                      </tr>
+                    ) : (
+                      members
+                        .filter(m => {
+                          const fullName = m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim();
+                          const identifier = m.contactPhone || m.memberId || m.identifier || m.id;
+                          const phone = m.phoneNumber || m.phone || m.contactPhone || '';
+                          
+                          return fullName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                 identifier.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                 phone.includes(searchQuery);
+                        })
+                        .map((member, i) => {
+                          const fullName = member.name || `${member.firstName || ''} ${member.lastName || ''}`.trim();
+                          const identifier = member.contactPhone || member.memberId || member.identifier || member.id;
+                          const phone = member.phoneNumber || member.phone || member.contactPhone || identifier;
 
-                            return (
-                              <tr key={member.id || i} className="group hover:bg-slate-50/80 transition-colors">
-                                <td className="py-4 px-6">
-                                  <span className="text-xs font-bold text-slate-300 font-mono">
-                                    {(currentCustomerPage - 1) * itemsPerPage + i + 1}
-                                  </span>
-                                </td>
-                                <td className="py-4 px-6">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-500 font-black text-xs border border-white shadow-sm">
-                                      {fullName ? fullName.charAt(0).toUpperCase() : '?'}
-                                    </div>
-                                    <div>
-                                      <p className="text-sm font-bold text-slate-900">{fullName || 'ไม่ระบุชื่อ'}</p>
-                                      <div className="flex items-center gap-1.5 mt-0.5">
-                                        <span className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-500 font-mono">ID: {identifier}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="py-4 px-6">
-                                  <div className="flex items-center gap-2 text-slate-600">
-                                    <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center">
-                                      <Phone size={12} />
-                                    </div>
-                                    <span className="text-xs font-bold font-mono">{phone || '-'}</span>
-                                  </div>
-                                </td>
-                                <td className="py-4 px-6 text-right">
-                                  <span className="text-xs font-medium text-slate-500">
-                                    {joinDate ? joinDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
-                                  </span>
-                                </td>
-                                <td className="py-4 px-6 text-right">
-                                  <div className="flex gap-2 justify-end">
-                                    <button 
-                                      onClick={() => handleEditMember(member)}
-                                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all group-hover:bg-white group-hover:shadow-sm border border-transparent group-hover:border-slate-100"
-                                      title="แก้ไขข้อมูล"
-                                    >
-                                      <Edit2 size={16} />
-                                    </button>
-                                    <button 
-                                      onClick={() => handleViewMemberHistory(member)}
-                                      className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all group-hover:bg-white group-hover:shadow-sm border border-transparent group-hover:border-slate-100"
-                                      title="ดูประวัติ"
-                                    >
-                                      <History size={16} />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                
-                {/* Pagination */}
-                {members.length > 0 && (
-                  <div className="p-4 border-t border-slate-100 bg-slate-50/30 flex items-center justify-between">
-                    <p className="text-xs font-bold text-slate-400">
-                      แสดง {Math.min((currentCustomerPage - 1) * itemsPerPage + 1, members.length)} - {Math.min(currentCustomerPage * itemsPerPage, members.length)} จาก {members.length} รายการ
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => setCurrentCustomerPage(prev => Math.max(1, prev - 1))}
-                        disabled={currentCustomerPage === 1}
-                        className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:text-slate-900 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
-                      >
-                        <ChevronLeft size={16} />
-                      </button>
-                      <span className="text-xs font-black text-slate-700 px-2">
-                        หน้า {currentCustomerPage} / {Math.ceil(members.filter(m => {
-                            const fullName = m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim();
-                            const identifier = m.contactPhone || m.memberId || m.identifier || m.id;
-                            const phone = m.phoneNumber || m.phone || m.contactPhone || '';
-                            const q = searchQuery.toLowerCase();
-                            return fullName.toLowerCase().includes(q) || 
-                                   identifier.toLowerCase().includes(q) ||
-                                   phone.includes(q);
-                          }).length / itemsPerPage) || 1}
-                      </span>
-                      <button 
-                        onClick={() => setCurrentCustomerPage(prev => Math.min(Math.ceil(members.filter(m => {
-                            const fullName = m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim();
-                            const identifier = m.contactPhone || m.memberId || m.identifier || m.id;
-                            const phone = m.phoneNumber || m.phone || m.contactPhone || '';
-                            const q = searchQuery.toLowerCase();
-                            return fullName.toLowerCase().includes(q) || 
-                                   identifier.toLowerCase().includes(q) ||
-                                   phone.includes(q);
-                          }).length / itemsPerPage), prev + 1))}
-                        disabled={currentCustomerPage >= Math.ceil(members.filter(m => {
-                            const fullName = m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim();
-                            const identifier = m.contactPhone || m.memberId || m.identifier || m.id;
-                            const phone = m.phoneNumber || m.phone || m.contactPhone || '';
-                            const q = searchQuery.toLowerCase();
-                            return fullName.toLowerCase().includes(q) || 
-                                   identifier.toLowerCase().includes(q) ||
-                                   phone.includes(q);
-                          }).length / itemsPerPage)}
-                        className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:text-slate-900 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
-                      >
-                        <ChevronRight size={16} />
-                      </button>
-                    </div>
-                  </div>
-                )}
+                          return (
+                            <tr key={member.id || i} className="group hover:bg-slate-50/50 transition-colors">
+                              <td className="py-4">
+                                <span className="text-[10px] font-bold text-slate-400 font-mono">
+                                  {identifier}
+                                </span>
+                              </td>
+                              <td className="py-4">
+                                <p className="text-xs font-bold text-slate-900">{fullName || 'Unnamed'}</p>
+                                <p className="text-[9px] text-slate-300">Joined {member.createdAt ? (member.createdAt.seconds ? new Date(member.createdAt.seconds * 1000).toLocaleDateString() : new Date(member.createdAt).toLocaleDateString()) : '-'}</p>
+                              </td>
+                              <td className="py-4 text-xs text-slate-500">
+                                {phone}
+                              </td>
+                              <td className="py-4 text-right">
+                                <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button 
+                                    onClick={() => handleEditMember(member)}
+                                    className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-all"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleViewMemberHistory(member)}
+                                    className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-all"
+                                  >
+                                    <Clock size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -1718,7 +1769,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                         const headers = ['Date', 'Time', 'Branch', 'Coupon', 'Status', 'Member ID', 'Member Name'];
                         const csvContent = [
                             headers.join(','),
-                            ...couponUsageLogs.filter(log => {
+                            ...usageLogs.filter(log => {
                                 // Apply same filters as analytics
                                 let d: Date | null = null;
                                 if (log.timestamp?.toDate) d = log.timestamp.toDate();
@@ -1909,7 +1960,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                       </RePieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-2xl font-black text-slate-900">{couponUsageLogs.length}</span>
+                      <span className="text-2xl font-black text-slate-900">{usageLogs.length}</span>
                       <span className="text-[8px] font-bold text-slate-400 uppercase">ทั้งหมด</span>
                     </div>
                   </div>
@@ -1983,11 +2034,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                   <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                     <div 
                                       className="h-full bg-slate-900 rounded-full" 
-                                      style={{width: `${(branch.count / (couponUsageLogs.filter(l => l.status === 'Used' || l.status === 'ใช้แล้ว' || l.status === 'Success').length || 1)) * 100}%`}}
+                                      style={{width: `${(branch.count / (usageLogs.filter(l => l.status === 'Used' || l.status === 'ใช้แล้ว' || l.status === 'Success').length || 1)) * 100}%`}}
                                     ></div>
                                   </div>
                                   <span className="text-[10px] font-bold text-slate-400">
-                                    {Math.round((branch.count / (couponUsageLogs.filter(l => l.status === 'Used' || l.status === 'ใช้แล้ว' || l.status === 'Success').length || 1)) * 100)}%
+                                    {Math.round((branch.count / (usageLogs.filter(l => l.status === 'Used' || l.status === 'ใช้แล้ว' || l.status === 'Success').length || 1)) * 100)}%
                                   </span>
                                 </div>
                               </td>
@@ -1998,56 +2049,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Ad Analytics Section */}
-              <div className="space-y-6 pt-8 border-t border-slate-100">
-                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Megaphone size={20} className="text-slate-900" />
-                        <h3 className="text-lg font-black text-slate-900 tracking-tight">สถิติโฆษณา (Ad Analytics)</h3>
-                    </div>
-                    <button 
-                        onClick={handleClearAdStats}
-                        disabled={isClearingAdStats || !usageLogs.some(l => l.type === 'ad_click')}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isClearingAdStats ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                        <span className="text-xs font-bold">ล้างสถิติโฆษณา</span>
-                    </button>
-                 </div>
-                 
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">จำนวนการคลิกทั้งหมด</p>
-                        <h4 className="text-2xl font-black text-slate-900">{analytics.totalAdClicks}</h4>
-                    </div>
-                    
-                    <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">ยอดคลิกแยกตามโฆษณา</p>
-                        <div className="h-[200px] w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={analytics.adAnalyticsData} layout="vertical" margin={{left: 40, right: 20}}>
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                                    <XAxis type="number" hide />
-                                    <YAxis 
-                                        dataKey="name" 
-                                        type="category" 
-                                        axisLine={false} 
-                                        tickLine={false} 
-                                        tick={{fontSize: 10, fontWeight: 700, fill: '#475569'}}
-                                        width={150}
-                                    />
-                                    <Tooltip 
-                                        cursor={{fill: '#f8fafc'}}
-                                        contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px'}}
-                                    />
-                                    <Bar dataKey="count" fill="#F8B500" radius={[0, 4, 4, 0]} barSize={20} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                 </div>
               </div>
 
 
@@ -2441,66 +2442,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">เบอร์โทรศัพท์</label>
-                  <input 
-                    name="phone"
-                    type="text" 
-                    defaultValue={editingMember?.phone || editingMember?.phoneNumber || ''}
-                    className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">อีเมล</label>
-                  <input 
-                    name="email"
-                    type="email" 
-                    defaultValue={editingMember?.email || ''}
-                    className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Line ID</label>
-                  <input 
-                    name="lineId"
-                    type="text" 
-                    defaultValue={editingMember?.lineId || ''}
-                    className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">วันเกิด</label>
-                  <input 
-                    name="birthDate"
-                    type="date" 
-                    defaultValue={editingMember?.birthDate || ''}
-                    className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
-                  />
-                </div>
-              </div>
-
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">คะแนนสะสม</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">เบอร์โทรศัพท์</label>
                 <input 
-                  name="points"
-                  type="number" 
-                  defaultValue={editingMember?.points || 0}
+                  name="phone"
+                  type="text" 
+                  defaultValue={editingMember?.phone || editingMember?.phoneNumber || ''}
                   className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ที่อยู่</label>
-                <textarea 
-                  name="address"
-                  rows={3}
-                  defaultValue={editingMember?.address || ''}
-                  className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200 resize-none"
+                  required
                 />
               </div>
               <div className="pt-4">
@@ -2623,6 +2572,330 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         </div>
       )}
 
+      {/* Modal for Add/Edit Promotion */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-scale-up">
+            <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between">
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">
+                {editingPromo ? 'แก้ไขแคมเปญ' : 'สร้างแคมเปญใหม่'}
+              </h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900 transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleSavePromo} className="p-8 space-y-6">
+              <div className="flex items-center justify-between bg-slate-50 px-4 py-3 rounded-xl">
+                <div>
+                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">สถานะการใช้งาน</label>
+                </div>
+                <div className="relative inline-block w-10 h-5 transition duration-200 ease-in-out rounded-full">
+                  <input 
+                    type="checkbox" 
+                    name="isActive"
+                    id="promoActive"
+                    defaultChecked={editingPromo?.isActive !== false}
+                    className="peer absolute w-0 h-0 opacity-0"
+                  />
+                  <label htmlFor="promoActive" className="block overflow-hidden h-5 rounded-full bg-slate-200 cursor-pointer peer-checked:bg-slate-900 transition-colors duration-200 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:shadow-sm after:transition-all after:duration-200 peer-checked:after:translate-x-5"></label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-4">
+                <div className="col-span-1 space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ลำดับความสำคัญ</label>
+                  <input 
+                    name="priority"
+                    type="number" 
+                    defaultValue={editingPromo?.priority || editingPromo?.week || 1}
+                    className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200 font-bold"
+                    required
+                  />
+                </div>
+                <div className="col-span-1 space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">สัปดาห์ (Week)</label>
+                  <input 
+                    name="week"
+                    type="number" 
+                    defaultValue={editingPromo?.week || 1}
+                    className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200 font-bold"
+                    required
+                  />
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ชื่อแคมเปญ</label>
+                  <input 
+                    name="period"
+                    type="text" 
+                    defaultValue={editingPromo?.period || ''}
+                    placeholder="เช่น Summer Special"
+                    className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">วันที่เริ่ม</label>
+                  <input 
+                    name="startDate"
+                    type="date" 
+                    defaultValue={editingPromo?.startDate ? formatLocalDate(editingPromo.startDate) : ''}
+                    className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">วันที่สิ้นสุด</label>
+                  <input 
+                    name="endDate"
+                    type="date" 
+                    defaultValue={editingPromo?.endDate ? formatLocalDate(editingPromo.endDate) : ''}
+                    className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-50">
+                <div className="flex items-center justify-between mb-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">คูปองในแคมเปญ</label>
+                  <button 
+                    type="button"
+                    onClick={handleAddCoupon}
+                    className="text-[10px] font-black text-slate-900 uppercase tracking-widest hover:opacity-70 flex items-center gap-1"
+                  >
+                    <Plus size={12} /> เพิ่มคูปอง
+                  </button>
+                </div>
+                
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                  {tempCoupons.length === 0 ? (
+                    <div className="text-center py-6 bg-slate-50 rounded-lg border border-dashed border-slate-100">
+                      <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">ยังไม่มีคูปอง</p>
+                    </div>
+                  ) : (
+                    tempCoupons.map((coupon, idx) => (
+                      <div key={coupon.id || idx} className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg group">
+                        <div className="w-8 h-8 rounded-md bg-white shrink-0 overflow-hidden border border-slate-100">
+                          <img src={coupon.imageUrl} alt="" className="w-full h-full object-cover" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-bold text-slate-900 truncate">{coupon.name}</p>
+                        </div>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            type="button"
+                            onClick={() => handleEditCoupon(coupon)}
+                            className="p-1 text-slate-400 hover:text-slate-900 transition-all"
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => handleDeleteCoupon(coupon.id, coupon.name)}
+                            className="p-1 text-slate-400 hover:text-red-500 transition-all"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 px-4 py-3 bg-slate-50 text-slate-400 rounded-lg font-bold text-xs hover:bg-slate-100 transition-all"
+                >
+                  ยกเลิก
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 px-4 py-3 bg-slate-900 text-white rounded-lg font-bold text-xs hover:bg-black transition-all"
+                >
+                  บันทึกแคมเปญ
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for Add/Edit Coupon */}
+      {isCouponModalOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-scale-up max-h-[90vh] flex flex-col">
+            <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between shrink-0">
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">
+                {editingCoupon?.id ? 'แก้ไขคูปอง' : 'สร้างคูปองใหม่'}
+              </h3>
+              <button onClick={() => setIsCouponModalOpen(false)} className="text-slate-400 hover:text-slate-900 transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveCoupon} className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">URL รูปภาพ</label>
+                <div className="flex gap-4 items-center">
+                  <div className="w-16 h-16 rounded-lg bg-slate-50 border border-slate-100 overflow-hidden shrink-0">
+                    <img 
+                      src={editingCoupon?.imageUrl || 'https://picsum.photos/seed/coupon/300/300'} 
+                      alt="Preview" 
+                      className="w-full h-full object-cover"
+                      onError={(e) => (e.currentTarget.src = 'https://picsum.photos/seed/coupon/300/300')}
+                    />
+                  </div>
+                  <input 
+                    name="imageUrl"
+                    type="text" 
+                    defaultValue={editingCoupon?.imageUrl || ''}
+                    placeholder="https://..."
+                    className="flex-1 px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ชื่อคูปอง</label>
+                  <input 
+                    name="name"
+                    type="text" 
+                    defaultValue={editingCoupon?.name || ''}
+                    className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">หัวข้อบนการ์ด</label>
+                  <input 
+                    name="cardTitle"
+                    type="text" 
+                    defaultValue={editingCoupon?.cardTitle || ''}
+                    className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">คำอธิบาย</label>
+                <textarea 
+                  name="description"
+                  rows={2}
+                  defaultValue={editingCoupon?.description || ''}
+                  className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200 resize-none"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">จำกัดการใช้งาน</label>
+                  <input 
+                    name="usageLimit"
+                    type="text" 
+                    defaultValue={editingCoupon?.usageLimit || '1 privilege / person'}
+                    className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ระยะเวลาการใช้งาน</label>
+                  <input 
+                    name="validityPeriod"
+                    type="text" 
+                    defaultValue={editingCoupon?.validityPeriod || ''}
+                    className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">เงื่อนไขการใช้งาน</label>
+                <textarea 
+                  name="details"
+                  rows={2}
+                  defaultValue={editingCoupon?.details || ''}
+                  className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200 resize-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ข้อกำหนดและเงื่อนไข (Terms)</label>
+                <textarea 
+                  name="terms"
+                  rows={2}
+                  defaultValue={editingCoupon?.terms || ''}
+                  className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200 resize-none"
+                />
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">เฉพาะสมาชิกเท่านั้น</label>
+                  <div className="relative inline-block w-10 h-5 transition duration-200 ease-in-out rounded-full">
+                    <input 
+                      type="checkbox" 
+                      name="isMemberOnly"
+                      id="isMemberOnly"
+                      defaultChecked={editingCoupon?.isMemberOnly}
+                      className="peer absolute w-0 h-0 opacity-0"
+                    />
+                    <label htmlFor="isMemberOnly" className="block overflow-hidden h-5 rounded-full bg-slate-200 cursor-pointer peer-checked:bg-slate-900 transition-colors duration-200 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:shadow-sm after:transition-all after:duration-200 peer-checked:after:translate-x-5"></label>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">กลุ่มเป้าหมาย (Targeting)</label>
+                  <select 
+                    name="targetType" 
+                    defaultValue={editingCoupon?.targetType || 'all'}
+                    className="w-full px-4 py-2 bg-white border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200"
+                  >
+                    <option value="all">ผู้ใช้ทั้งหมด</option>
+                    <option value="member">สมาชิกทั้งหมด</option>
+                    <option value="specific">ระบุรายบุคคล</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">รหัสสมาชิกเป้าหมาย (คั่นด้วยคอมมา)</label>
+                  <textarea 
+                    name="targetIds"
+                    rows={2}
+                    defaultValue={editingCoupon?.targetIds || ''}
+                    className="w-full px-4 py-2 bg-white border-none rounded-lg text-xs text-slate-900 focus:ring-1 focus:ring-slate-200 resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setIsCouponModalOpen(false)}
+                  className="flex-1 px-4 py-3 bg-slate-50 text-slate-400 rounded-lg font-bold text-xs hover:bg-slate-100 transition-all"
+                >
+                  ยกเลิก
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 px-4 py-3 bg-slate-900 text-white rounded-lg font-bold text-xs hover:bg-black transition-all"
+                >
+                  บันทึกคูปอง
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      
       <DeleteConfirmationModal 
         isOpen={deleteModal.isOpen}
         onClose={() => setDeleteModal(prev => ({ ...prev, isOpen: false }))}

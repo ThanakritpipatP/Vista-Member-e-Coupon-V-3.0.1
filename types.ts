@@ -60,24 +60,3 @@ export interface CouponHistoryEntry {
   date: string; // ISO 8601 format
   couponCode: string;
 }
-
-export interface AdSettings {
-  id?: string;
-  badgeText: string;
-  title: string;
-  description: string;
-  buttonText: string;
-  imageUrl: string;
-  gradientStart: string;
-  gradientEnd: string;
-  isActive: boolean;
-  // Color Customization
-  badgeColor?: string;
-  badgeBgColor?: string;
-  titleColor?: string;
-  descColor?: string;
-  buttonTextColor?: string;
-  buttonBgColor?: string;
-  order?: number;
-  buttonLink?: string;
-}
