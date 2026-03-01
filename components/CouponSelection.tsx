@@ -57,7 +57,7 @@ const CouponCard: React.FC<CouponCardProps> = ({ coupon, onSelect, isUsed = fals
         {isMember && (
           <div className="absolute top-4 left-0 z-30">
             <div className="bg-[#F8B500] text-white text-[10px] font-bold pl-4 pr-5 py-1.5 rounded-r-full shadow-lg">
-              Member Only
+              Member Exclusive
             </div>
           </div>
         )}

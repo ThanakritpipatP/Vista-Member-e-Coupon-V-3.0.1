@@ -52,7 +52,7 @@ export const validateUser = async (data: UserData): Promise<ValidationResponse> 
 
     // ตรวจสอบผลลัพธ์จากการค้นหาที่สำเร็จ
     for (const result of results) {
-      if (result.success && result.snapshot && !result.snapshot.empty) {
+      if (result.success && 'snapshot' in result && result.snapshot && !result.snapshot.empty) {
         const memberData = result.snapshot.docs[0].data();
         
         // ดึง firstName และ lastName มาต่อกัน

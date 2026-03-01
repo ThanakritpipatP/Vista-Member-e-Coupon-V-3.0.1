@@ -1,5 +1,5 @@
-
 import React from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface TermsModalProps {
   isOpen: boolean;
@@ -8,6 +8,8 @@ interface TermsModalProps {
 }
 
 const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onClose, terms }) => {
+  const { t } = useLanguage();
+
   if (!isOpen) return null;
 
   // Function to format the terms string into a list
@@ -34,7 +36,7 @@ const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onClose, terms }) => {
         onClick={e => e.stopPropagation()}
       >
         <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4 text-center">ข้อกำหนดและเงื่อนไข</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-4 text-center">{t('termsTitle')}</h2>
           <div className="text-sm text-gray-600 space-y-3 max-h-[60vh] overflow-y-auto no-scrollbar pr-2">
             {formattedTerms.map((line, index) => (
               <div key={index} className="flex items-start">
@@ -49,7 +51,7 @@ const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onClose, terms }) => {
             onClick={onClose}
             className="w-full bg-[#F8B500] text-white font-bold py-2.5 px-4 rounded-full shadow-md hover:scale-105 transition-transform"
           >
-            ปิด
+            {t('close')}
           </button>
         </div>
       </div>

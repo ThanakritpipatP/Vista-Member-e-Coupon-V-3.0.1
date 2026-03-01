@@ -1,6 +1,6 @@
-
 import React from 'react';
 import { AlertCircle, Trash2, X } from 'lucide-react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface DeleteConfirmationModalProps {
   isOpen: boolean;
@@ -18,9 +18,11 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
   onConfirm,
   title,
   message,
-  confirmText = 'ยืนยันการลบ',
-  cancelText = 'ยกเลิก'
+  confirmText,
+  cancelText
 }) => {
+  const { t } = useLanguage();
+  
   if (!isOpen) return null;
 
   return (
@@ -49,14 +51,14 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
               onClick={onClose}
               className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all"
             >
-              {cancelText}
+              {cancelText || t('cancel')}
             </button>
             <button
               onClick={onConfirm}
               className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white font-bold text-sm hover:bg-red-700 transition-all shadow-sm flex items-center justify-center gap-2"
             >
               <Trash2 size={16} />
-              {confirmText}
+              {confirmText || t('confirmDelete')}
             </button>
           </div>
         </div>

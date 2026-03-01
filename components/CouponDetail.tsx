@@ -1,7 +1,7 @@
-
 import React, { useState } from 'react';
 import { CouponInfo } from '../types';
 import TermsModal from './TermsModal';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface CouponDetailProps {
   coupon: CouponInfo;
@@ -11,10 +11,11 @@ interface CouponDetailProps {
 
 const CouponDetail: React.FC<CouponDetailProps> = ({ coupon, onUse, onBack }) => {
   const [isTermsModalOpen, setTermsModalOpen] = useState(false);
+  const { t } = useLanguage();
 
   const handleShare = async () => {
     const shareData = {
-      title: `คูปอง Vista Café: ${coupon.cardTitle}`,
+      title: `${t('shareTitle')}: ${coupon.cardTitle}`,
       text: coupon.description,
       url: 'https://vista-caf-member-e-coupon-new-version-662889500453.us-west1.run.app/',
     };
@@ -25,7 +26,7 @@ const CouponDetail: React.FC<CouponDetailProps> = ({ coupon, onUse, onBack }) =>
         console.error("Share failed:", err);
       }
     } else {
-      alert('ฟังก์ชันแชร์ไม่รองรับในเบราว์เซอร์นี้');
+      alert(t('shareNotSupported'));
     }
   };
   
@@ -33,7 +34,7 @@ const CouponDetail: React.FC<CouponDetailProps> = ({ coupon, onUse, onBack }) =>
   const endDate = validityPeriod.split(' - ')[1] || validityPeriod;
 
   return (
-    <div className="w-full bg-[#F3F4F6] flex flex-col min-h-screen relative overflow-x-hidden">
+    <div className="w-full bg-white flex flex-col min-h-screen relative overflow-x-hidden">
       {/* 1. Header Area with Coupon Image */}
       <div className="relative w-full h-[300px] flex flex-col items-center justify-center bg-[#1A1A1A] overflow-hidden">
         {/* Coupon Image Background */}
@@ -108,20 +109,20 @@ const CouponDetail: React.FC<CouponDetailProps> = ({ coupon, onUse, onBack }) =>
                  </svg>
               </div>
               <div className="flex flex-col">
-                <span className="text-[#9CA3AF] text-[11px] font-bold uppercase tracking-wider mb-0.5">ระยะเวลาใช้งาน</span>
+                <span className="text-[#9CA3AF] text-[11px] font-bold uppercase tracking-wider mb-0.5">{t('validityPeriod')}</span>
                 <span className="text-[#111827] font-bold text-[15px]">{coupon.validityPeriod}</span>
               </div>
             </div>
 
             {/* Terms of Use Section */}
             <div className="space-y-4">
-              <h3 className="text-lg font-bold text-[#111827]">เงื่อนไขการใช้งาน</h3>
+              <h3 className="text-lg font-bold text-[#111827]">{t('termsConditions')}</h3>
               <div className="bg-[#F9FAFB] rounded-2xl p-5 border border-[#F3F4F6] shadow-sm">
                 <p className="text-[#374151] text-sm leading-relaxed mb-5">
                   {coupon.details}
                 </p>
                 <div className="pt-4 border-t border-[#E5E7EB] flex items-center">
-                  <span className="text-[#9CA3AF] text-xs font-medium">หมดเขต: {endDate}</span>
+                  <span className="text-[#9CA3AF] text-xs font-medium">{t('expires')}: {endDate}</span>
                 </div>
               </div>
             </div>
@@ -131,7 +132,7 @@ const CouponDetail: React.FC<CouponDetailProps> = ({ coupon, onUse, onBack }) =>
               onClick={() => setTermsModalOpen(true)}
               className="w-full mt-6 py-4 flex items-center justify-between group border-b border-gray-100"
             >
-              <span className="text-[#4B5563] text-sm font-semibold group-hover:text-[#111827] transition-colors">ข้อกำหนดและเงื่อนไขเพิ่มเติม</span>
+              <span className="text-[#4B5563] text-sm font-semibold group-hover:text-[#111827] transition-colors">{t('moreTerms')}</span>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#D1D5DB] group-hover:text-[#F8B500] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
@@ -148,7 +149,7 @@ const CouponDetail: React.FC<CouponDetailProps> = ({ coupon, onUse, onBack }) =>
             >
               {/* Shimmer Effect Layer */}
               <div className="absolute inset-0 z-0 bg-gradient-to-r from-transparent via-white/25 to-transparent w-full h-full -translate-x-full animate-shimmer pointer-events-none"></div>
-              <span className="relative z-10">กดรับสิทธิ์</span>
+              <span className="relative z-10">{t('redeem')}</span>
             </button>
         </div>
       </div>
