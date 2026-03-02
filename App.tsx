@@ -1,7 +1,9 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { UserData, UserStatus, CouponInfo, CouponHistoryEntry } from './types';
+// Fix: Removed MEMBER_MODAL_SCHEDULE which was not exported from constants.ts and unused in this file.
 import { VISTA_BRANCHES, COUPON_PREFIX_MEMBER, COUPON_PREFIX_GUEST } from './constants';
-import { MapPin, Navigation, Settings, X, CheckCircle2, AlertCircle, ChevronRight, ArrowLeft, User, Check, Database } from 'lucide-react';
+import { MapPin, Navigation, Settings, X, CheckCircle2, AlertCircle } from 'lucide-react';
 import { validateUser, logUsage, getMemberUsedCouponIds, getMemberCouponHistory } from './services/api';
 import MemberLoginModal from './components/MemberLoginModal';
 import CouponDisplay from './components/CouponDisplay';
@@ -13,15 +15,13 @@ import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import useGeolocation from './hooks/useGeolocation';
 import useWeeklyPromotions from './hooks/useWeeklyPromotions';
-import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
+
+type ViewState = 'LOGIN' | 'VALIDATING' | 'MEMBER_CONFIRMATION' | 'PROMPT_REGISTER' | 'COUPON_SELECTION' | 'COUPON_DETAIL' | 'COUPON' | 'USED' | 'ERROR' | 'HISTORY' | 'REGISTER' | 'ADMIN' | 'ADMIN_LOGIN';
 
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
-type ViewState = 'LOGIN' | 'VALIDATING' | 'MEMBER_CONFIRMATION' | 'PROMPT_REGISTER' | 'COUPON_SELECTION' | 'COUPON_DETAIL' | 'COUPON' | 'USED' | 'ERROR' | 'HISTORY' | 'REGISTER' | 'ADMIN' | 'ADMIN_LOGIN';
-
-function MainApp() {
-  const { t } = useLanguage();
+export default function App() {
   const [view, setView] = useState<ViewState>(() => {
     return window.location.pathname.startsWith('/admin') ? 'ADMIN_LOGIN' : 'LOGIN';
   });
@@ -47,7 +47,6 @@ function MainApp() {
   const [showLocationError, setShowLocationError] = useState(false);
   const [detectedBranch, setDetectedBranch] = useState<any>(null);
   const [locationErrorMsg, setLocationErrorMsg] = useState<string>('');
-  const [progress, setProgress] = useState(0);
 
   const { triggerGeolocation, resetLocation } = useGeolocation(VISTA_BRANCHES);
   const { currentPromotions, isLoading: isPromosLoading } = useWeeklyPromotions(userData);
@@ -91,44 +90,39 @@ function MainApp() {
           console.error('Failed to fetch remote used coupons:', e);
         }
         
-        setProgress(100);
-        await new Promise(resolve => setTimeout(resolve, 500));
-
         if (isAutoLogin) {
           setView('COUPON_SELECTION');
         } else {
           setView('MEMBER_CONFIRMATION');
         }
       } else if (result.status === UserStatus.NON_MEMBER) {
-        setProgress(100);
-        await new Promise(resolve => setTimeout(resolve, 500));
         setCouponEntitlement(UserStatus.NON_MEMBER);
         setView('PROMPT_REGISTER');
       } else {
-        setErrorMessage(t('errorMemberNotFound'));
+        setErrorMessage('ไม่พบข้อมูลสมาชิก หรือคุณใช้สิทธิ์ของเดือนนี้ครบแล้วค่ะ');
         setView('ERROR');
       }
     } catch (error) {
       console.error('Full Validation Error:', error);
-      let message = t('errorValidation');
+      let message = 'เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์ กรุณาลองใหม่อีกครั้งนะคะ';
       
       if (error instanceof Error) {
         const errText = error.message.toLowerCase();
         if (errText.includes('script error')) {
-          message = t('errorScript');
+          message = 'ขออภัยค่ะ เซิร์ฟเวอร์ขัดข้องชั่วคราวเนื่องจากมีการใช้งานหนาแน่น (Quota Exceeded) กรุณารอ 1-2 นาทีแล้วลองใหม่นะคะ';
         } else if (errText.includes('timeout')) {
-          message = t('errorTimeout');
+          message = 'ขออภัยค่ะ เซิร์ฟเวอร์ขัดข้องชั่วคราวเนื่องจากมีการใช้งานหนาแน่น กรุณารอ 1-2 นาทีแล้วลองใหม่นะคะ';
         } else {
           message = error.message;
         }
       } else if (String(error).toLowerCase().includes('script error')) {
-        message = t('errorConnection');
+        message = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ในขณะนี้ กรุณาเว้นระยะสักครู่แล้วลองใหม่ค่ะ';
       }
       
       setErrorMessage(message);
       setView('ERROR');
     }
-  }, [t]);
+  }, []);
 
   // Auto-login check
   useEffect(() => {
@@ -156,21 +150,6 @@ function MainApp() {
       window.history.pushState(null, '', '/admin');
     } else if (view !== 'ADMIN' && view !== 'ADMIN_LOGIN' && path.startsWith('/admin')) {
       window.history.pushState(null, '', '/');
-    }
-  }, [view]);
-
-  // Animate progress bar when validating
-  useEffect(() => {
-    if (view === 'VALIDATING') {
-      setProgress(0);
-      const interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 95) return prev;
-          // Random increment between 1 and 3
-          return Math.min(prev + Math.random() * 2 + 1, 95);
-        });
-      }, 100);
-      return () => clearInterval(interval);
     }
   }, [view]);
 
@@ -236,11 +215,11 @@ function MainApp() {
       setView('COUPON_DETAIL'); // Stay on detail view but show modal
     } catch (e) {
         console.warn("Geolocation failed:", e);
-        setLocationErrorMsg(e instanceof Error ? e.message : t('errorLocation'));
+        setLocationErrorMsg(e instanceof Error ? e.message : 'ไม่สามารถเข้าถึงตำแหน่งได้');
         setShowLocationError(true);
         setView('COUPON_DETAIL'); // Stay on detail view but show modal
     }
-  }, [selectedCoupon, triggerGeolocation, t]);
+  }, [selectedCoupon, triggerGeolocation]);
   
   const handleProceedAsNonMember = useCallback(() => {
     setUserData({ identifier: 'Guest' });
@@ -385,7 +364,7 @@ function MainApp() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          <p className="text-xl font-bold text-gray-900">{t('loadingCoupons')}</p>
+          <p className="text-xl font-bold text-gray-900">กำลังโหลดข้อมูลคูปอง...</p>
         </div>
       );
     }
@@ -400,14 +379,14 @@ function MainApp() {
             <button
               onClick={resetState}
               className="fixed bottom-6 left-6 z-50 flex items-center justify-center w-14 h-14 bg-white text-gray-700 rounded-full shadow-2xl border border-gray-100 active:scale-95 transition-all hover:bg-gray-50 group"
-              title={t('backToHome')}
+              title="กลับหน้าหลัก"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
               {/* Tooltip text showing on hover */}
               <span className="absolute left-16 bg-white px-3 py-1.5 rounded-lg shadow-lg text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-gray-50 whitespace-nowrap">
-                {t('backToHome')}
+                กลับหน้าหลัก
               </span>
             </button>
             
@@ -415,141 +394,84 @@ function MainApp() {
               <iframe 
                 src="https://vista-caf-member-register-system-186896723259.us-west1.run.app/" 
                 className="w-full h-full border-none"
-                title={t('registerTitle')}
+                title="สมัครสมาชิก Vista Café"
               />
             </div>
           </div>
         );
       case 'VALIDATING':
         return (
-          <div className="flex flex-col w-full h-full bg-white relative">
-            {/* Header */}
-            <div className="flex items-center justify-center px-6 py-4 relative">
-               <button 
-                onClick={() => setView('LOGIN')}
-                className="absolute left-6 p-2 -ml-2 text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <ArrowLeft size={24} />
-              </button>
-              <h1 className="text-lg font-bold text-gray-900">{t('checkingInfo')}</h1>
-            </div>
-
-            <div className="flex-1 flex flex-col items-center justify-center px-8 -mt-20">
-               {/* Spinner */}
-               <div className="relative mb-8 w-32 h-32 flex items-center justify-center">
-                  {/* Outer Ring */}
-                  <div className="absolute inset-0 rounded-full border-4 border-amber-50"></div>
-                  {/* Spinning Ring */}
-                  <div className="absolute inset-0 rounded-full border-4 border-[#F8B500] border-t-transparent animate-spin"></div>
-                  
-                  {/* Icon */}
-                  <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center text-[#F8B500] shadow-sm">
-                     <Database size={32} />
-                  </div>
-               </div>
-
-               <h2 className="text-xl font-bold text-gray-900 mb-3 text-center">{t('validatingSystem')}</h2>
-               <p className="text-gray-400 text-center text-sm mb-12 max-w-xs font-medium leading-relaxed">
-                 {t('validatingWait')}
-               </p>
-
-               {/* Progress Bar */}
-               <div className="w-full max-w-xs space-y-2">
-                  <div className="flex justify-between text-xs font-bold text-[#F8B500]">
-                     <span>{t('processing')}</span>
-                     <span>{Math.round(progress)}%</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                     <div 
-                        className="bg-[#F8B500] h-full rounded-full animate-pulse shadow-[0_0_10px_rgba(248,181,0,0.4)] transition-all duration-300 ease-out"
-                        style={{ width: `${progress}%` }}
-                     ></div>
-                  </div>
-               </div>
-            </div>
+          <div className="flex flex-col items-center justify-center text-gray-600 p-8 h-full w-full bg-pattern">
+            <svg className="animate-spin h-12 w-12 text-[#F8B500] mb-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p className="text-xl font-bold text-gray-900">ระบบกำลังตรวจสอบข้อมูล...</p>
+            <p className="text-gray-400 mt-2 text-center max-w-xs">อาจใช้เวลาสักครู่ในการเชื่อมต่อฐานข้อมูลสมาชิก</p>
           </div>
         );
       case 'MEMBER_CONFIRMATION':
         return (
-          <div className="flex flex-col w-full h-full bg-[#FAFAFA] relative">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-md sticky top-0 z-10">
-              <button 
-                onClick={() => setView('LOGIN')}
-                className="p-2 -ml-2 text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <ArrowLeft size={24} />
-              </button>
-              <h1 className="text-lg font-bold text-gray-900">{t('confirmMember')}</h1>
-              <div className="w-10"></div> {/* Spacer for centering */}
+          <div className="flex flex-col items-center justify-center text-gray-800 p-8 text-center w-full h-full bg-pattern overflow-hidden">
+            <div className="mb-12 relative flex items-center justify-center">
+               <div className="w-32 h-32 bg-green-50 rounded-full animate-pulse-subtle"></div>
+               <div className="absolute inset-0 w-32 h-32 bg-green-100 rounded-full animate-ripple-center opacity-0 pointer-events-none"></div>
+               <div className="absolute w-24 h-24 bg-white rounded-full flex items-center justify-center border border-green-50 shadow-2xl shadow-green-900/5 animate-success-pop overflow-hidden">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={4.5} 
+                      d="M5 13l4 4L19 7" 
+                      className="animate-check-draw"
+                    />
+                  </svg>
+               </div>
+            </div>
+            
+            <div className="mb-10 animate-fade-up">
+               <h2 className="text-[30px] font-black text-[#111827] tracking-tight">ยืนยันข้อมูลสมาชิก</h2>
+            </div>
+            
+            <div className="bg-white rounded-[32px] p-8 w-full max-w-[360px] text-left mb-10 space-y-6 border border-gray-100 shadow-xl shadow-gray-200/40 animate-fade-up delay-100 overflow-hidden">
+                <div>
+                    <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest mb-1.5 opacity-70">หมายเลขสมาชิก</p>
+                    <p className="text-[20px] font-black text-gray-800 tracking-tight truncate">{userData?.identifier}</p>
+                </div>
+                <div className="pt-5 border-t border-gray-50">
+                    <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest mb-1.5 opacity-70">ชื่อ-นามสกุล</p>
+                    <p 
+                      className="font-black text-gray-800 tracking-tight break-words leading-tight transition-all duration-300 pr-2"
+                      style={{ 
+                        fontSize: memberName && memberName.length > 15 
+                          ? `${Math.max(13, 22 - (memberName.length - 15) * 0.5)}px` 
+                          : '22px'
+                      }}
+                    >
+                      {memberName || '...'}
+                    </p>
+                </div>
             </div>
 
-            <div className="flex-1 flex flex-col items-center px-6 pt-8 pb-24 overflow-y-auto">
-              {/* Check Circle */}
-              <div className="w-24 h-24 bg-amber-100 rounded-full flex items-center justify-center mb-8 shadow-sm ring-8 ring-amber-50">
-                <div className="w-16 h-16 bg-[#F8B500] rounded-full flex items-center justify-center shadow-lg shadow-amber-200">
-                  <Check size={32} className="text-white" strokeWidth={3} />
-                </div>
+            <div className="w-full max-w-[360px] space-y-5">
+              <div className="animate-fade-up delay-200">
+                <button
+                  onClick={handleMemberConfirm}
+                  className="relative overflow-hidden w-full bg-[#111827] text-white font-bold py-6 px-6 rounded-2xl shadow-xl shadow-gray-200 transition-all duration-300 active:scale-95 hover:bg-black"
+                >
+                  <div className="absolute inset-0 z-0 bg-gradient-to-r from-transparent via-white/10 to-transparent w-full h-full -translate-x-full animate-shimmer pointer-events-none"></div>
+                  <span className="relative z-10">ยืนยันข้อมูลสมาชิก</span>
+                </button>
               </div>
-
-              {/* Title & Description */}
-              <h2 className="text-2xl font-bold text-gray-900 mb-3 text-center tracking-tight">
-                {t('checkInfo')}
-              </h2>
-              <p className="text-gray-500 text-center mb-10 max-w-xs leading-relaxed font-medium">
-                {t('checkInfoDesc')}
-              </p>
-
-              {/* Info Card */}
-              <div className="w-full bg-white rounded-3xl p-6 shadow-sm border border-gray-100 relative overflow-hidden">
-                {/* Name Section */}
-                <div className="flex items-start gap-4 mb-8 relative z-10">
-                  <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-[#F8B500] shrink-0">
-                    <User size={24} />
-                  </div>
-                  <div>
-                    <p className="text-[#F8B500] text-xs font-bold mb-1 uppercase tracking-wide">{t('name')}</p>
-                    <p className="text-xl font-bold text-gray-900 leading-tight">
-                      {memberName || 'Unknown Member'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="h-px w-full bg-gray-50 mb-8"></div>
-
-                {/* Member ID Section */}
-                <div className="flex justify-between items-end relative z-10">
-                  <div>
-                    <p className="text-[#F8B500] text-xs font-bold mb-1 uppercase tracking-wide">
-                      {t('memberId')}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900 tracking-tight font-mono">
-                      {userData?.identifier}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Decorative Background Elements */}
-                <div className="absolute -top-10 -right-10 w-32 h-32 bg-amber-50/50 rounded-full blur-3xl"></div>
-                <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-orange-50/50 rounded-full blur-3xl"></div>
-              </div>
-            </div>
-
-            {/* Bottom Action Area */}
-            <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-gray-100 z-20 pb-safe">
-              <button
-                onClick={handleMemberConfirm}
-                className="w-full bg-[#F8B500] hover:bg-[#E5A800] text-white font-bold text-lg py-4 rounded-2xl shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-              >
-                {t('confirmInfo')} <ChevronRight size={24} />
-              </button>
               
-              <button 
-                onClick={handleMemberClear}
-                className="w-full mt-4 text-center text-gray-400 text-sm font-medium hover:text-gray-600 transition-colors"
-              >
-                {t('incorrectInfoLink')}
-              </button>
+              <div className="animate-fade-up delay-300">
+                <button
+                  onClick={handleMemberClear}
+                  className="w-full bg-transparent text-gray-400 font-bold py-2 px-6 rounded-2xl transition-colors hover:text-gray-600 text-sm"
+                >
+                  ข้อมูลไม่ถูกต้อง? <span className="underline decoration-gray-200 underline-offset-4">กรอกใหม่</span>
+                </button>
+              </div>
             </div>
           </div>
         );
@@ -562,8 +484,8 @@ function MainApp() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                </div>
-               <h2 className="text-2xl font-bold text-gray-900 mb-2">{t('memberNotFound')}</h2>
-               <p className="text-gray-500 text-sm">{t('registerPrompt')}</p>
+               <h2 className="text-2xl font-bold text-gray-900 mb-2">ไม่พบข้อมูลสมาชิก</h2>
+               <p className="text-gray-500 text-sm">สมัครสมาชิกใหม่ เพื่อรับสิทธิพิเศษ</p>
             </div>
 
             <div className="w-full max-w-[320px] space-y-4">
@@ -571,13 +493,13 @@ function MainApp() {
                 onClick={handleRegisterClick}
                 className="block w-full text-center bg-[#F8B500] text-white font-bold py-4 px-6 rounded-2xl shadow-xl transition-transform duration-200 active:scale-95"
               >
-                {t('btnRegister')}
+                สมัครสมาชิก
               </button>
               <button
                 onClick={resetState}
                 className="w-full bg-white text-gray-600 font-bold py-4 px-6 rounded-2xl border border-gray-100 shadow-sm transition-colors active:bg-gray-50"
               >
-                {t('backToHome')}
+                กลับไปหน้าหลัก
               </button>
             </div>
           </div>
@@ -631,7 +553,7 @@ function MainApp() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                </svg>
             </div>
-            <p className="text-xl font-bold text-red-600 mb-2">{t('errorTitle')}</p>
+            <p className="text-xl font-bold text-red-600 mb-2">เกิดข้อผิดพลาด!</p>
             <div className="mb-10 text-gray-500 max-w-xs mx-auto leading-relaxed">
               {errorMessage}
             </div>
@@ -639,16 +561,18 @@ function MainApp() {
               onClick={resetState}
               className="bg-[#111827] text-white font-bold py-4 px-10 rounded-2xl shadow-xl transition-all active:scale-95"
             >
-              {t('backToHome')}
+              ย้อนกลับหน้าแรก
             </button>
           </div>
         );
     }
   };
   
+  const containerBG = ['COUPON_SELECTION', 'COUPON_DETAIL', 'HISTORY'].includes(view) ? 'bg-pattern-gray' : 'bg-pattern';
+
   return (
-    <div className="w-full text-gray-800 relative flex flex-col h-screen h-[100dvh] overflow-hidden bg-white">
-      <div className="relative z-10 flex flex-col items-center flex-1 w-full overflow-y-auto overflow-x-hidden custom-scrollbar">
+    <div className={`w-full text-gray-800 relative flex flex-col h-screen h-[100dvh] overflow-hidden ${containerBG}`}>
+      <div className="relative z-10 flex flex-col items-center flex-grow w-full h-full overflow-hidden">
           {renderContent()}
       </div>
       {/* Branch Confirmation Modal */}
@@ -659,8 +583,8 @@ function MainApp() {
               <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-emerald-100">
                 <MapPin className="text-emerald-500 w-8 h-8" />
               </div>
-              <h3 className="text-lg font-bold text-emerald-900 mb-1">{t('confirmBranch')}</h3>
-              <p className="text-sm text-emerald-600">{t('usingServiceAt')}</p>
+              <h3 className="text-lg font-bold text-emerald-900 mb-1">ยืนยันพิกัดสาขา</h3>
+              <p className="text-sm text-emerald-600">คุณกำลังใช้บริการอยู่ที่</p>
             </div>
             <div className="p-6">
               <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-100 flex items-center gap-3">
@@ -668,7 +592,7 @@ function MainApp() {
                   <Navigation className="text-slate-700 w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('branch')}</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">สาขาที่มาใช้สิทธ์</p>
                   <p className="text-base font-bold text-slate-900">{detectedBranch.name}</p>
                 </div>
               </div>
@@ -679,7 +603,7 @@ function MainApp() {
                   className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
                   <CheckCircle2 size={18} />
-                  {t('infoCorrect')}
+                  ข้อมูลถูกต้อง
                 </button>
                 <button
                   onClick={() => {
@@ -688,7 +612,7 @@ function MainApp() {
                   }}
                   className="w-full bg-white border border-slate-200 text-slate-600 font-bold py-3.5 rounded-xl hover:bg-slate-50 transition-all active:scale-95"
                 >
-                  {t('infoIncorrect')}
+                  ไม่ถูกต้อง กรุณาเลือกสาขา
                 </button>
               </div>
             </div>
@@ -702,8 +626,8 @@ function MainApp() {
           <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-scale-up flex flex-col max-h-[80vh]">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">{t('selectBranch')}</h3>
-                <p className="text-xs text-slate-500">{t('selectBranchPrompt')}</p>
+                <h3 className="text-lg font-bold text-slate-900">เลือกสาขาที่ใช้บริการ</h3>
+                <p className="text-xs text-slate-500">กรุณาระบุสาขาที่คุณกำลังใช้บริการ</p>
               </div>
               <button 
                 onClick={() => setShowManualBranchSelection(false)}
@@ -726,7 +650,7 @@ function MainApp() {
                     </div>
                     <div>
                       <p className="font-bold text-slate-800 group-hover:text-amber-900">{branch.name}</p>
-                      <p className="text-[10px] text-slate-400 group-hover:text-amber-700/70">{t('tapToSelect')}</p>
+                      <p className="text-[10px] text-slate-400 group-hover:text-amber-700/70">กดเพื่อเลือกสาขานี้</p>
                     </div>
                   </button>
                 ))}
@@ -744,8 +668,8 @@ function MainApp() {
               <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-amber-100">
                 <AlertCircle className="text-amber-500 w-8 h-8" />
               </div>
-              <h3 className="text-lg font-bold text-amber-900 mb-1">{t('locationError')}</h3>
-              <p className="text-sm text-amber-700/80 px-4">{locationErrorMsg || t('locationErrorPrompt')}</p>
+              <h3 className="text-lg font-bold text-amber-900 mb-1">ไม่สามารถระบุพิกัดได้</h3>
+              <p className="text-sm text-amber-700/80 px-4">{locationErrorMsg || 'กรุณาอนุญาตให้เข้าถึงตำแหน่งเพื่อเช็คอินอัตโนมัติ'}</p>
             </div>
             
             <div className="p-6 space-y-3">
@@ -756,14 +680,14 @@ function MainApp() {
                 }}
                 className="w-full bg-[#111827] text-white font-bold py-3.5 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
               >
-                {t('selectBranchManual')}
+                เลือกสาขาด้วยตนเอง
               </button>
               
               <button
                 onClick={() => setShowLocationError(false)}
                 className="w-full bg-white border border-slate-200 text-slate-600 font-bold py-3.5 rounded-xl hover:bg-slate-50 transition-all active:scale-95"
               >
-                {t('cancel')}
+                ยกเลิก
               </button>
             </div>
           </div>
@@ -776,13 +700,5 @@ function MainApp() {
         onSubmit={handleValidation}
       />
     </div>
-  );
-}
-
-export default function App() {
-  return (
-    <LanguageProvider>
-      <MainApp />
-    </LanguageProvider>
   );
 }

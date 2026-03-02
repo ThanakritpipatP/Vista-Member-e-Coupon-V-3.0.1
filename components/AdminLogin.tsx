@@ -1,8 +1,8 @@
+
 import React, { useState } from 'react';
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { Lock, Mail, Loader2, AlertCircle, ChevronLeft } from 'lucide-react';
-import { useLanguage } from '../contexts/LanguageContext';
 
 interface AdminLoginProps {
   onBack: () => void;
@@ -14,7 +14,6 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onBack, onSuccess }) => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { t } = useLanguage();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,11 +26,11 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onBack, onSuccess }) => {
     } catch (err: any) {
       console.error("Login error:", err);
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        setError(t('invalidCredentials'));
+        setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
       } else if (err.code === 'auth/too-many-requests') {
-        setError(t('tooManyRequests'));
+        setError('มีการพยายามเข้าสู่ระบบมากเกินไป กรุณาลองใหม่ในภายหลัง');
       } else {
-        setError(t('loginError'));
+        setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
       }
     } finally {
       setIsLoading(false);
@@ -54,12 +53,12 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onBack, onSuccess }) => {
           <div className="w-20 h-20 bg-slate-900 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-slate-900/20">
             <Lock className="text-white" size={32} />
           </div>
-          <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight mb-2">{t('adminLoginTitle')}</h2>
-          <p className="text-slate-400 text-sm font-medium mb-8">{t('adminLoginSubtitle')}</p>
+          <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight mb-2">Vista Admin</h2>
+          <p className="text-slate-400 text-sm font-medium mb-8">กรุณาเข้าสู่ระบบเพื่อจัดการแคมเปญและสมาชิก</p>
 
           <form onSubmit={handleSubmit} className="space-y-4 text-left">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{t('adminEmailLabel')}</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">อีเมลผู้ดูแลระบบ</label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                 <input 
@@ -74,7 +73,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onBack, onSuccess }) => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{t('passwordLabel')}</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">รหัสผ่าน</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                 <input 
@@ -103,10 +102,10 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onBack, onSuccess }) => {
               {isLoading ? (
                 <>
                   <Loader2 className="animate-spin" size={20} />
-                  <span>{t('loggingInButton')}</span>
+                  <span>กำลังเข้าสู่ระบบ...</span>
                 </>
               ) : (
-                <span>{t('loginButton')}</span>
+                <span>เข้าสู่ระบบ</span>
               )}
             </button>
           </form>
@@ -114,7 +113,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onBack, onSuccess }) => {
 
         <div className="p-8 bg-slate-50/50 border-t border-slate-50 text-center">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            {t('adminFooter')}
+            Vista Café Member E-Coupon System v2.0
           </p>
         </div>
       </div>
